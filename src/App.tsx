@@ -13,8 +13,6 @@ import BountiesPage from "./components/BountiesPage";
 import MarketsPage from "./components/MarketsPage";
 import ToastContainer, { Toast } from "./components/ToastContainer";
 import { usePrivy, useWallets, useLogin } from "@privy-io/react-auth";
-
-// Dummy wrapper for individual claim routing helper
 import { useParams } from "react-router-dom";
 import { useCheckIfProfileExists, useFetchClaim, useFetchClaims } from "./hooks/TruthArena";
 import ProfileSetupModal from "./components/ProfileSetupModal";
@@ -31,7 +29,6 @@ export default function App() {
   // Toasts Notification State
   const [toasts, setToasts] = useState<Toast[]>([]);
   const {isPending: isFetchingClaims, data: claims} = useFetchClaims()
-  const [isTriggering, setIsTriggering] = useState(false);
 
   // Profile-gating states
   const [showSetupModal, setShowSetupModal] = useState(false);
@@ -125,7 +122,7 @@ export default function App() {
         ) : (
           /* Declarative Engine Configuration mapping layout routes to clean URLs */
           <Routes>
-            <Route path="/" element={<LandingPage claims={claims} onNavigate={(path) => navigate(`/${path}`)} />} />
+            <Route path="/" element={<LandingPage onNavigate={(path) => navigate(`/${path}`)} />} />
             <Route path="/claims" element={<ExploreClaimsPage claims={claims} onNavigate={(path) => navigate(`/${path}`)} isLoading={isFetchingClaims} />} />
             <Route path="/claims/:id" element={<ClaimDetailWrapper />} />
             <Route path="/submit" element={<SubmitClaimPage isConnected={isConnected} walletAddress={walletAddress} onConnectClick={login} addToast={addToast}/>} />

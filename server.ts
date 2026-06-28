@@ -106,15 +106,146 @@ const INITIAL_CLAIMS = [
   }
 ];
 
-// Helper to load claims
+const PROFILES_FILE = path.join(DATA_DIR, "profiles.json");
+
+// Helper to load profiles
+function loadProfiles(): Record<string, any> {
+  try {
+    if (!fs.existsSync(PROFILES_FILE)) {
+      fs.writeFileSync(PROFILES_FILE, JSON.stringify({}, null, 2));
+      return {};
+    }
+    return JSON.parse(fs.readFileSync(PROFILES_FILE, "utf-8"));
+  } catch (e) {
+    return {};
+  }
+}
+
+// Helper to save profiles
+function saveProfiles(profiles: Record<string, any>) {
+  try {
+    fs.writeFileSync(PROFILES_FILE, JSON.stringify(profiles, null, 2));
+  } catch (e) {
+    console.error("Error saving profiles", e);
+  }
+}
+
+// Get or create user profile
+function getOrCreateProfile(address: string, userClaimsCount: number): any {
+  const profiles = loadProfiles();
+  const lowerAddress = address.toLowerCase();
+  
+  if (!profiles[lowerAddress]) {
+    let username: string | undefined = undefined;
+    let reputation = userClaimsCount * 15 + 100;
+    let genBalance = 25000; // 25,000 initial balance
+
+    if (lowerAddress === "0x71c644e297676767676767676767676767676767") {
+      username = "budget_hound";
+      reputation += 25;
+      genBalance = 15800;
+    } else if (lowerAddress === "0xf81544e434343434343434343434343434343434") {
+      username = "cosmic_watcher";
+      reputation += 40;
+      genBalance = 34500;
+    }
+
+    profiles[lowerAddress] = {
+      address,
+      username,
+      reputation,
+      genBalance,
+      registeredAt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
+    };
+    saveProfiles(profiles);
+  } else {
+    if (profiles[lowerAddress].genBalance === undefined) {
+      profiles[lowerAddress].genBalance = 25000;
+      saveProfiles(profiles);
+    }
+  }
+  return profiles[lowerAddress];
+}
+
+// Helper to load claims with strict on-demand backward compatibility
 function loadClaims(): any[] {
   try {
+    let claims: any[];
     if (!fs.existsSync(CLAIMS_FILE)) {
-      fs.writeFileSync(CLAIMS_FILE, JSON.stringify(INITIAL_CLAIMS, null, 2));
-      return INITIAL_CLAIMS;
+      claims = INITIAL_CLAIMS;
+      fs.writeFileSync(CLAIMS_FILE, JSON.stringify(claims, null, 2));
+    } else {
+      const data = fs.readFileSync(CLAIMS_FILE, "utf-8");
+      claims = JSON.parse(data);
     }
-    const data = fs.readFileSync(CLAIMS_FILE, "utf-8");
-    return JSON.parse(data);
+
+    // Ensure all claims have Phase 2 (bounty) and Phase 3 (market) structures
+    let updated = false;
+    claims = claims.map((c) => {
+      let claimUpdated = false;
+      if (c.bountyAmount === undefined) {
+        if (c.id === "claim-1") c.bountyAmount = 1500;
+        else if (c.id === "claim-2") c.bountyAmount = 3000;
+        else if (c.id === "claim-3") c.bountyAmount = 12000;
+        else if (c.id === "claim-5") c.bountyAmount = 5000;
+        else c.bountyAmount = 0;
+        claimUpdated = true;
+      }
+      if (c.bountySubmissions === undefined) {
+        if (c.id === "claim-3") {
+          c.bountySubmissions = [
+            {
+              id: "sub-1",
+              claimId: "claim-3",
+              submittedBy: "0x71C644E297676767676767676767676767676767",
+              username: "budget_hound",
+              explanation: "Synthesized the crystalline lead apatite at room temperature. Measured electrical resistance which showed a standard semiconductor energy gap instead of a superconducting state. The levitation is due to standard diamagnetism.",
+              sourceUrls: ["https://nature.com/articles/d41586-026-00124-y"],
+              score: 95,
+              feedback: "Exceptional and rigorous laboratory replication analysis. Directly addresses the diamagnetism vs superconductivity mismatch.",
+              createdAt: new Date(Date.now() - 2.9 * 24 * 60 * 60 * 1000).toISOString()
+            }
+          ];
+        } else if (c.id === "claim-5") {
+          c.bountySubmissions = [
+            {
+              id: "sub-2",
+              claimId: "claim-5",
+              submittedBy: "0xF81544E434343434343434343434343434343434",
+              username: "cosmic_watcher",
+              explanation: "Analyzed NASA Sentry trajectory table parameters. Initial observations indeed span a short arc of 15 days which gives an elevated probability. However, historical near-Earth objects of this scale are usually ruled out as more measurements are populated.",
+              sourceUrls: ["https://cneos.jpl.nasa.gov/sentry/details.html#2026FT9"],
+              score: 88,
+              feedback: "High quality analysis of the initial tracking uncertainty ellipse. Excellent integration with official databases.",
+              createdAt: new Date(Date.now() - 4.9 * 24 * 60 * 60 * 1000).toISOString()
+            }
+          ];
+        } else {
+          c.bountySubmissions = [];
+        }
+        claimUpdated = true;
+      }
+      if (c.supportPool === undefined) {
+        if (c.id === "claim-1") { c.supportPool = 4500; c.challengePool = 8200; }
+        else if (c.id === "claim-2") { c.supportPool = 12500; c.challengePool = 9800; }
+        else if (c.id === "claim-3") { c.supportPool = 5000; c.challengePool = 15000; }
+        else if (c.id === "claim-4") { c.supportPool = 8000; c.challengePool = 10000; }
+        else if (c.id === "claim-5") { c.supportPool = 25000; c.challengePool = 3000; }
+        else { c.supportPool = 1000; c.challengePool = 1000; }
+        claimUpdated = true;
+      }
+      if (c.marketStakes === undefined) {
+        c.marketStakes = [];
+        claimUpdated = true;
+      }
+      if (claimUpdated) updated = true;
+      return c;
+    });
+
+    if (updated) {
+      fs.writeFileSync(CLAIMS_FILE, JSON.stringify(claims, null, 2));
+    }
+    return claims;
   } catch (error) {
     console.error("Error loading claims, using defaults", error);
     return INITIAL_CLAIMS;
@@ -393,16 +524,313 @@ app.get("/api/profile/:address", (req, res) => {
     (c) => c.submittedBy.toLowerCase() === address.toLowerCase()
   );
 
-  // Simulated profile registration
-  const mockProfile = {
-    address,
-    username: address === "0x71C644E297676767676767676767676767676767" ? "budget_hound" : undefined,
-    registeredAt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
-    reputation: userClaims.length * 15 + 100,
+  const profile = getOrCreateProfile(address, userClaims.length);
+  res.json({
+    ...profile,
     claims: userClaims
+  });
+});
+
+// 5b. Register / Update username
+app.post("/api/profile/:address/register", (req, res) => {
+  const { address } = req.params;
+  const { username } = req.body;
+
+  if (!username || !username.match(/^[a-zA-Z0-9_]{3,15}$/)) {
+    return res.status(400).json({ error: "Invalid username format" });
+  }
+
+  const claims = loadClaims();
+  const userClaims = claims.filter(
+    (c) => c.submittedBy.toLowerCase() === address.toLowerCase()
+  );
+
+  const profiles = loadProfiles();
+  const lowerAddress = address.toLowerCase();
+
+  const profile = getOrCreateProfile(address, userClaims.length);
+  profile.username = username.trim();
+  profile.reputation += 25; // Bonus for register
+
+  profiles[lowerAddress] = profile;
+  saveProfiles(profiles);
+
+  res.json({
+    ...profile,
+    claims: userClaims
+  });
+});
+
+// 5c. Fund Bounty with GEN
+app.post("/api/claims/:id/bounty", (req, res) => {
+  const { id } = req.params;
+  const { amount, userAddress } = req.body;
+
+  if (!amount || amount <= 0 || !userAddress) {
+    return res.status(400).json({ error: "Invalid bounty amount or user address" });
+  }
+
+  const claims = loadClaims();
+  const claimIndex = claims.findIndex((c) => c.id === id);
+  if (claimIndex === -1) {
+    return res.status(404).json({ error: "Claim not found" });
+  }
+
+  const profiles = loadProfiles();
+  const lowerAddress = userAddress.toLowerCase();
+  if (!profiles[lowerAddress] || profiles[lowerAddress].genBalance < amount) {
+    return res.status(400).json({ error: "Insufficient GEN token balance to fund this bounty" });
+  }
+
+  // Deduct balance and add bounty
+  profiles[lowerAddress].genBalance -= amount;
+  profiles[lowerAddress].reputation += Math.floor(amount / 10); // Reputation reward
+  saveProfiles(profiles);
+
+  claims[claimIndex].bountyAmount = (claims[claimIndex].bountyAmount || 0) + amount;
+  saveClaims(claims);
+
+  res.json(claims[claimIndex]);
+});
+
+// 5d. Submit Investigation / Research Report (with AI Scoring)
+app.post("/api/claims/:id/submissions", async (req, res) => {
+  const { id } = req.params;
+  const { explanation, sourceUrls, userAddress } = req.body;
+
+  if (!explanation || explanation.trim().length < 20 || !userAddress) {
+    return res.status(400).json({ error: "Explanation must be at least 20 characters long" });
+  }
+
+  const claims = loadClaims();
+  const claimIndex = claims.findIndex((c) => c.id === id);
+  if (claimIndex === -1) {
+    return res.status(404).json({ error: "Claim not found" });
+  }
+
+  const profiles = loadProfiles();
+  const lowerAddress = userAddress.toLowerCase();
+  const profile = getOrCreateProfile(userAddress, 0);
+
+  // Initialize arrays if undefined
+  if (!claims[claimIndex].bountySubmissions) {
+    claims[claimIndex].bountySubmissions = [];
+  }
+
+  // AI Scoring setup
+  const apiKey = process.env.GEMINI_API_KEY;
+  const isKeyConfigured = apiKey && apiKey !== "MY_GEMINI_API_KEY" && apiKey.trim() !== "";
+  
+  let score = 85;
+  let feedback = "Solid report submitted. Clear logical arguments and supporting links that build a strong investigation track.";
+
+  const systemPrompt = `You are the TruthArena decentralized on-chain AI Validator. Your task is to score a research report submitted by a fact-checker regarding a claim. 
+Evaluate:
+1. Depth and clarity of explanation.
+2. Relevance and reliability of supporting sources.
+3. Logical consistency of arguments.
+
+Provide a score between 0 and 100, and a short constructive paragraph of feedback explaining your evaluation. Return your response strictly in the specified JSON schema.`;
+
+  const prompt = `Claim Title: ${claims[claimIndex].title}
+Claim Details: ${claims[claimIndex].text}
+
+Fact-checker Report:
+Explanation: ${explanation}
+Supporting Sources: ${Array.isArray(sourceUrls) ? sourceUrls.join(", ") : "None"}
+
+Please evaluate and score this report.`;
+
+  if (isKeyConfigured) {
+    try {
+      console.log(`AI scoring starting for researcher report on claim: ${id}`);
+      const ai = new GoogleGenAI({ apiKey: apiKey });
+      const aiResponse = await ai.models.generateContent({
+        model: "gemini-3.5-flash",
+        contents: prompt,
+        config: {
+          systemInstruction: systemPrompt,
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              score: { 
+                type: Type.INTEGER, 
+                description: "On-chain quality score from 0 to 100." 
+              },
+              feedback: { 
+                type: Type.STRING, 
+                description: "Constructive feedback and brief review." 
+              }
+            },
+            required: ["score", "feedback"]
+          }
+        }
+      });
+
+      if (aiResponse.text) {
+        const result = JSON.parse(aiResponse.text.trim());
+        score = result.score || 85;
+        feedback = result.feedback || feedback;
+      }
+    } catch (e) {
+      console.error("AI scoring failed, using high-quality dynamic simulator fallback", e);
+      // fallback based on quality
+      const linkCount = Array.isArray(sourceUrls) ? sourceUrls.filter(Boolean).length : 0;
+      score = Math.min(98, 70 + Math.min(explanation.length / 30, 15) + (linkCount * 5));
+      feedback = "Your research report lists credible evidence links. The structural arguments are logically robust and support on-chain reconciliation parameters.";
+    }
+  } else {
+    // smart default feedback
+    const linkCount = Array.isArray(sourceUrls) ? sourceUrls.filter(Boolean).length : 0;
+    score = Math.floor(Math.min(98, 72 + Math.min(explanation.length / 25, 16) + (linkCount * 4)));
+    feedback = "Good work compiling this report! Your explanation makes a clear case, and the supporting citations add crucial contextual depth to our consensus ledger.";
+  }
+
+  const newSubmission = {
+    id: `sub-${Date.now()}`,
+    claimId: id,
+    submittedBy: userAddress,
+    username: profile.username || undefined,
+    explanation,
+    sourceUrls: Array.isArray(sourceUrls) ? sourceUrls.filter(Boolean) : [],
+    score,
+    feedback,
+    createdAt: new Date().toISOString()
   };
 
-  res.json(mockProfile);
+  claims[claimIndex].bountySubmissions.push(newSubmission);
+  saveClaims(claims);
+
+  // Reward the researcher
+  profiles[lowerAddress].reputation = (profiles[lowerAddress].reputation || 100) + 50; // +50 rep for submitting report
+  saveProfiles(profiles);
+
+  res.json(claims[claimIndex]);
+});
+
+// 5e. Stake GEN on Truth Market
+app.post("/api/claims/:id/stake", (req, res) => {
+  const { id } = req.params;
+  const { amount, prediction, userAddress } = req.body; // prediction: 'Support' | 'Challenge'
+
+  if (!amount || amount <= 0 || !prediction || !userAddress) {
+    return res.status(400).json({ error: "Invalid stake fields" });
+  }
+
+  const claims = loadClaims();
+  const claimIndex = claims.findIndex((c) => c.id === id);
+  if (claimIndex === -1) {
+    return res.status(404).json({ error: "Claim not found" });
+  }
+
+  const profiles = loadProfiles();
+  const lowerAddress = userAddress.toLowerCase();
+  if (!profiles[lowerAddress] || profiles[lowerAddress].genBalance < amount) {
+    return res.status(400).json({ error: "Insufficient GEN token balance to place this stake" });
+  }
+
+  // Deduct balance and register stake
+  profiles[lowerAddress].genBalance -= amount;
+  profiles[lowerAddress].reputation += 10; // Staking engagement reward
+  saveProfiles(profiles);
+
+  const claim = claims[claimIndex];
+  if (prediction === 'Support') {
+    claim.supportPool = (claim.supportPool || 0) + amount;
+  } else {
+    claim.challengePool = (claim.challengePool || 0) + amount;
+  }
+
+  if (!claim.marketStakes) {
+    claim.marketStakes = [];
+  }
+
+  claim.marketStakes.push({
+    id: `stake-${Date.now()}`,
+    claimId: id,
+    userAddress,
+    amount,
+    prediction,
+    claimed: false,
+    createdAt: new Date().toISOString()
+  });
+
+  saveClaims(claims);
+  res.json(claim);
+});
+
+// 5f. Claim Market Payout from resolved market
+app.post("/api/claims/:id/claim-payout", (req, res) => {
+  const { id } = req.params;
+  const { userAddress } = req.body;
+
+  if (!userAddress) {
+    return res.status(400).json({ error: "User address is required" });
+  }
+
+  const claims = loadClaims();
+  const claimIndex = claims.findIndex((c) => c.id === id);
+  if (claimIndex === -1) {
+    return res.status(404).json({ error: "Claim not found" });
+  }
+
+  const claim = claims[claimIndex];
+  if (claim.status === "Pending" || claim.status === "Investigating") {
+    return res.status(400).json({ error: "This market has not been resolved yet" });
+  }
+
+  if (!claim.marketStakes || claim.marketStakes.length === 0) {
+    return res.status(400).json({ error: "You have no stakes in this market" });
+  }
+
+  // Winning side logic
+  // 'Support' wins if Verified. 'Challenge' wins if False, Misleading, or Unverified.
+  const winningPrediction = claim.status === "Verified" ? "Support" : "Challenge";
+  const winningPool = winningPrediction === "Support" ? (claim.supportPool || 1) : (claim.challengePool || 1);
+  const losingPool = winningPrediction === "Support" ? (claim.challengePool || 0) : (claim.supportPool || 0);
+
+  let userWinningStakes = claim.marketStakes.filter(
+    (s) => s.userAddress.toLowerCase() === userAddress.toLowerCase() && s.prediction === winningPrediction && !s.claimed
+  );
+
+  if (userWinningStakes.length === 0) {
+    return res.status(400).json({ error: "You have no unclaimed winning stakes in this market" });
+  }
+
+  // Calculate total winnings
+  let totalUserWinningStaked = userWinningStakes.reduce((sum, s) => sum + s.amount, 0);
+  
+  // payout = userStaked + userStaked/winningPool * losingPool
+  const winningsPayout = Math.floor(totalUserWinningStaked + (totalUserWinningStaked / winningPool * losingPool));
+
+  // Mark as claimed
+  claim.marketStakes = claim.marketStakes.map((s) => {
+    if (s.userAddress.toLowerCase() === userAddress.toLowerCase() && s.prediction === winningPrediction) {
+      return { ...s, claimed: true };
+    }
+    return s;
+  });
+  saveClaims(claims);
+
+  // Update profile balance
+  const profiles = loadProfiles();
+  const lowerAddress = userAddress.toLowerCase();
+  const profile = getOrCreateProfile(userAddress, 0);
+  profile.genBalance = (profile.genBalance || 0) + winningsPayout;
+  profile.reputation += 30; // payout reward points
+  profiles[lowerAddress] = profile;
+  saveProfiles(profiles);
+
+  res.json({
+    success: true,
+    payout: winningsPayout,
+    profile: {
+      ...profile,
+      claims: claims.filter((c) => c.submittedBy.toLowerCase() === userAddress.toLowerCase())
+    },
+    claim
+  });
 });
 
 // 6. Newsletter Signup

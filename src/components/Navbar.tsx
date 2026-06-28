@@ -72,29 +72,25 @@ export default function Navbar({
             Submit Claim
           </button>
 
-          {/* Coming Soon: Bounties */}
-          <span
-            id="nav-bounties-coming-soon"
-            className="text-sm text-[#6b7280] cursor-default font-medium flex items-center gap-1.5"
-            title="Phase 2 - Investigation Bounties"
+          <button
+            id="nav-bounties"
+            onClick={() => handleLinkClick("bounties")}
+            className={`font-medium text-sm transition-colors ${
+              currentPath === "bounties" ? "text-[#0a0a0a] underline underline-offset-4" : "text-[#6b7280] hover:text-[#0a0a0a]"
+            }`}
           >
             Investigation Bounties
-            <span className="text-[10px] bg-[#f3f3f3] text-[#6b7280] px-1.5 py-0.5 rounded-full font-mono font-normal">
-              Coming Soon
-            </span>
-          </span>
+          </button>
 
-          {/* Coming Soon: Markets */}
-          <span
-            id="nav-markets-coming-soon"
-            className="text-sm text-[#6b7280] cursor-default font-medium flex items-center gap-1.5"
-            title="Phase 3 - Truth Markets"
+          <button
+            id="nav-markets"
+            onClick={() => handleLinkClick("markets")}
+            className={`font-medium text-sm transition-colors ${
+              currentPath === "markets" ? "text-[#0a0a0a] underline underline-offset-4" : "text-[#6b7280] hover:text-[#0a0a0a]"
+            }`}
           >
             Truth Markets
-            <span className="text-[10px] bg-[#f3f3f3] text-[#6b7280] px-1.5 py-0.5 rounded-full font-mono font-normal">
-              Coming Soon
-            </span>
-          </span>
+          </button>
         </div>
 
         {/* Right Desktop Action Button / Account pill */}
@@ -163,37 +159,39 @@ export default function Navbar({
             <button
               id="mobile-nav-explore"
               onClick={() => handleLinkClick("claims")}
-              className={`text-left font-bold text-lg ${
-                currentPath === "claims" ? "text-[#0a0a0a]" : "text-[#6b7280]"
-              }`}
+              className={`text-left font-bold text-lg ${currentPath === "claims" ? "text-[#0a0a0a]" : "text-[#6b7280]"
+                }`}
             >
               Explore Claims
             </button>
             <button
               id="mobile-nav-submit"
               onClick={() => handleLinkClick("submit")}
-              className={`text-left font-bold text-lg ${
-                currentPath === "submit" ? "text-[#0a0a0a]" : "text-[#6b7280]"
-              }`}
+              className={`text-left font-bold text-lg ${currentPath === "submit" ? "text-[#0a0a0a]" : "text-[#6b7280]"
+                }`}
             >
               Submit Claim
             </button>
 
             <hr className="border-[#e5e5e5]" />
 
-            <div className="flex flex-col space-y-1">
-              <span className="text-sm font-bold text-[#6b7280]">Investigation Bounties</span>
-              <span className="text-xs text-[#9ca3af] flex items-center gap-1.5">
-                Phase 2 — <span className="bg-[#f3f3f3] px-1.5 py-0.5 rounded-full text-[10px]">Coming Soon</span>
-              </span>
-            </div>
+            <button
+              id="mobile-nav-bounties"
+              onClick={() => handleLinkClick("bounties")}
+              className={`text-left font-bold text-lg ${currentPath === "bounties" ? "text-[#0a0a0a]" : "text-[#6b7280]"
+                }`}
+            >
+              Investigation Bounties
+            </button>
 
-            <div className="flex flex-col space-y-1 pt-2">
-              <span className="text-sm font-bold text-[#6b7280]">Truth Markets</span>
-              <span className="text-xs text-[#9ca3af] flex items-center gap-1.5">
-                Phase 3 — <span className="bg-[#f3f3f3] px-1.5 py-0.5 rounded-full text-[10px]">Coming Soon</span>
-              </span>
-            </div>
+            <button
+              id="mobile-nav-markets"
+              onClick={() => handleLinkClick("markets")}
+              className={`text-left font-bold text-lg ${currentPath === "markets" ? "text-[#0a0a0a]" : "text-[#6b7280]"
+                }`}
+            >
+              Truth Markets
+            </button>
           </div>
 
           <div className="pt-6 border-t border-[#e5e5e5] flex flex-col space-y-3 mt-auto">

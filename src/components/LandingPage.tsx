@@ -1,15 +1,15 @@
 import { ArrowRight } from "lucide-react";
 import { Claim } from "../types";
+import { useFetchClaims } from "../hooks/TruthArena";
 
 interface LandingPageProps {
-  claims: Claim[];
   onNavigate: (path: string) => void;
 }
 
-export default function LandingPage({ claims, onNavigate }: LandingPageProps) {
+export default function LandingPage({ onNavigate }: LandingPageProps) {
   // Get recent verdicts (resolved claims)
-  const resolvedClaims = claims
-    .filter((c) => ["Verified", "False", "Misleading", "Unverified"].includes(c.status))
+  const {isPending: isFetchingClaims, data: claims} = useFetchClaims()
+  const resolvedClaims = claims?.filter((c) => ["verified", "false", "misleading", "unverified"].includes(c.status))
     .slice(0, 5);
 
   const getVerdictStyle = (status: string) => {
@@ -209,19 +209,19 @@ export default function LandingPage({ claims, onNavigate }: LandingPageProps) {
           </button>
         </div>
 
-        {resolvedClaims.length > 0 ? (
+        {resolvedClaims?.length > 0 ? (
           <div id="verdicts-table" className="divide-y divide-[#e5e5e5] border-y border-[#e5e5e5]">
             {resolvedClaims.map((claim) => (
               <button
-                key={claim.id}
-                id={`verdict-row-${claim.id}`}
-                onClick={() => onNavigate(`claims/${claim.id}`)}
+                key={claim.claim_id}
+                id={`verdict-row-${claim.claim_id}`}
+                onClick={() => onNavigate(`claims/${claim.claim_id}`)}
                 className="w-full flex flex-col md:flex-row md:items-center text-left py-4 px-2 hover:bg-[#f3f3f3] transition-colors gap-3 md:gap-6"
               >
                 {/* Badge Column */}
                 <div className="md:w-32 flex-shrink-0">
                   <span
-                    id={`verdict-badge-${claim.id}`}
+                    id={`verdict-badge-${claim.claim_id}`}
                     className={`inline-block px-3 py-1 font-mono text-xs font-bold tracking-tight text-center uppercase ${getVerdictStyle(
                       claim.status
                     )}`}
@@ -240,7 +240,7 @@ export default function LandingPage({ claims, onNavigate }: LandingPageProps) {
                 {/* Metadata Column */}
                 <div className="md:w-48 flex-shrink-0 flex items-center justify-between md:justify-end gap-4 text-xs font-mono text-[#6b7280]">
                   <span>{claim.category}</span>
-                  <span>{formatTimeAgo(claim.createdAt)}</span>
+                  <span>{formatTimeAgo(claim.submitted_at)}</span>
                 </div>
               </button>
             ))}
