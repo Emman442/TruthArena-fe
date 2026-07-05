@@ -12,25 +12,26 @@ import ProfilePage from "./components/ProfilePage";
 import BountiesPage from "./components/BountiesPage";
 import MarketsPage from "./components/MarketsPage";
 import ToastContainer, { Toast } from "./components/ToastContainer";
-import { usePrivy, useWallets, useLogin } from "@privy-io/react-auth";
 import { useParams } from "react-router-dom";
 import { useCheckIfProfileExists, useFetchClaim, useFetchClaims } from "./hooks/TruthArena";
 import ProfileSetupModal from "./components/ProfileSetupModal";
+import { useWallet } from "./lib/genlayer/wallet";
+import { getAddress } from "viem";
 
 export default function App() {
-  const { ready, authenticated, logout } = usePrivy();
-  const { wallets } = useWallets();
-  const navigate = useNavigate(); // <-- Replaces your manual window.location.hash switching
-  const location = useLocation();  // <-- Replaces usePathname! Give you access to location.pathname
-  const activeWallet = wallets[0];
-  const walletAddress = activeWallet?.address || "";
-  const isConnected = ready && authenticated && !!walletAddress;
-  const { isLoading: isProfileLoading, data: profileExists } = useCheckIfProfileExists(walletAddress);
-  // Toasts Notification State
+  const wallet = useWallet();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { address: LowerCaseAddress, isConnected, isMetaMaskInstalled,
+    isOnCorrectNetwork,
+    isLoading,
+    connectWallet,
+    disconnectWallet,
+    switchWalletAccount, } = wallet
+  const walletAddress = LowerCaseAddress ? getAddress(LowerCaseAddress) : "";
+  const { isLoading: isProfileLoading, data: profileExists } = useCheckIfProfileExists(walletAddress || null);
   const [toasts, setToasts] = useState<Toast[]>([]);
-  const {isPending: isFetchingClaims, data: claims} = useFetchClaims()
-
-  // Profile-gating states
+  const { isPending: isFetchingClaims, data: claims } = useFetchClaims()
   const [showSetupModal, setShowSetupModal] = useState(false);
   const [hasChecked, setHasChecked] = useState(false);
 
@@ -41,58 +42,60 @@ export default function App() {
   const removeToast = (id: string) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   };
-  const { login } = useLogin({
-    onError: (err) => console.error(err)
-  });
 
 
   useEffect(() => {
-    // If there is no active wallet connected, reset tracking states and hide the modal
     if (!walletAddress) {
       setHasChecked(false);
       setShowSetupModal(false);
       return;
     }
 
-    // Wait quietly if the contract profile query is still resolving on GenLayer
-    if (isProfileLoading) return;
+    // 2. Wait quietly if the hook is loading OR if the profile data hasn't hit yet
+    if (isProfileLoading || profileExists === undefined) return;
 
-    // Guard constraint: Only flag or prompt a user once per wallet connection sequence
+    // 3. Guard constraint: Only resolve once per settled query result
     if (hasChecked) return;
-    setHasChecked(true);
 
-    if (profileExists) {
+    if (profileExists === true) {
       addToast("Welcome back to TruthArena!", "success");
-    } else {
-      // Trigger Onboarding modal if profile data row does not exist on-chain
+      setShowSetupModal(false); // Force close modal if open
+      setHasChecked(true);      // Lock the sequence
+    } else if (profileExists === false) {
+      // Trigger Onboarding modal if profile data row definitely does not exist on-chain
       setShowSetupModal(true);
+      setHasChecked(true);      // Lock the sequence
     }
   }, [walletAddress, isProfileLoading, profileExists, hasChecked]);
-
 
   // Helper component to extract ID from URL parameters smoothly
   const ClaimDetailWrapper = () => {
     const { id } = useParams<{ id: string }>();
-    const {isPending: isFetchingClaim, data: targetClaim} = useFetchClaim(id)
+    const { isPending: isFetchingClaim, data: targetClaim } = useFetchClaim(id)
 
     if (isFetchingClaim) return <div className="py-16 text-center font-mono text-[#6b7280]">Fetching claim logs...</div>;
     if (!targetClaim) return <div className="py-16 text-center text-sm font-mono text-[#dc2626]">Error: Claim not found.</div>;
     console.log(targetClaim)
     return (
       <ClaimDetailPage
+        addToast={addToast}
         claim={targetClaim}
         onNavigate={(path) => navigate(`/${path}`)}
+        walletAddress={walletAddress}
       />
     );
   };
+  console.log(profileExists, walletAddress)
 
   return (
     <div id="trutharena-app" className="min-h-screen bg-white text-[#0a0a0a] font-sans flex flex-col antialiased">
       <Navbar
         isConnected={isConnected}
         walletAddress={walletAddress}
-        onConnectClick={login}
-        onDisconnect={logout}
+        isMetaMaskInstalled={isMetaMaskInstalled}
+        connectWallet={connectWallet}
+        onConnectClick={connectWallet}
+        onDisconnect={disconnectWallet}
         currentPath={location.pathname.replace("/", "") || "home"} // maps cleanly to your active highlights
         onNavigate={(path) => navigate(`/${path}`)} // changes routes declaratively
       />
@@ -106,7 +109,7 @@ export default function App() {
       )}
 
       {/* Onboarding Trigger Modal */}
-      <ProfileSetupModal
+      {isConnected && !profileExists && (<ProfileSetupModal
         isOpen={showSetupModal}
         onClose={() => setShowSetupModal(false)}
         address={walletAddress}
@@ -114,10 +117,10 @@ export default function App() {
           setShowSetupModal(false);
           addToast("Profile synchronized successfully!", "success");
         }}
-      />
+      />)}
 
       <main id="main-content" className="flex-grow">
-        {!ready ? (
+        {isLoading ? (
           <div className="py-16 text-center font-mono text-[#6b7280]">Initializing Auth Services...</div>
         ) : (
           /* Declarative Engine Configuration mapping layout routes to clean URLs */
@@ -125,10 +128,10 @@ export default function App() {
             <Route path="/" element={<LandingPage onNavigate={(path) => navigate(`/${path}`)} />} />
             <Route path="/claims" element={<ExploreClaimsPage claims={claims} onNavigate={(path) => navigate(`/${path}`)} isLoading={isFetchingClaims} />} />
             <Route path="/claims/:id" element={<ClaimDetailWrapper />} />
-            <Route path="/submit" element={<SubmitClaimPage isConnected={isConnected} walletAddress={walletAddress} onConnectClick={login} addToast={addToast}/>} />
+            <Route path="/submit" element={<SubmitClaimPage isConnected={isConnected} walletAddress={walletAddress} onConnectClick={connectWallet} addToast={addToast} />} />
             <Route path="/profile" element={<ProfilePage isConnected={isConnected} walletAddress={walletAddress} onNavigate={(path) => navigate(`/${path}`)} addToast={addToast} />} />
-            <Route path="/bounties" element={<BountiesPage addToast={addToast} />} />
-            <Route path="/markets" element={<MarketsPage addToast={addToast} />} />
+            <Route path="/bounties" element={<BountiesPage addToast={addToast} isConnected={isConnected} walletAddress={walletAddress} onNavigate={(path) => navigate(`/${path}`)} />} />
+            <Route path="/markets" element={<MarketsPage addToast={addToast} isConnected={isConnected} walletAddress={walletAddress} onNavigate={(path) => navigate(`/${path}`)} />} />
           </Routes>
         )}
       </main>

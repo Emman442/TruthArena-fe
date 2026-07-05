@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { Award, DollarSign, Send, Shield, Users, Search, Plus, CheckCircle, ExternalLink, RefreshCw } from "lucide-react";
 import { Claim, BountySubmission } from "../types";
+import { useFetchClaimInvestigations, useFetchClaims } from "../hooks/TruthArena";
+import getUserBalance from "../lib/contract/TruthArena"
 
 interface BountiesPageProps {
   claims: Claim[];
@@ -13,46 +15,27 @@ interface BountiesPageProps {
 }
 
 export default function BountiesPage({
-  claims,
   isConnected,
   walletAddress,
   onConnectClick,
   onNavigate,
-  fetchClaims,
   addToast
 }: BountiesPageProps) {
   const [selectedClaimId, setSelectedClaimId] = useState<string | null>(null);
   const [userProfile, setUserProfile] = useState<any | null>(null);
-  
-  // Funding form state
+  const { isPending: isFetchingClaims, data: claims } = useFetchClaims()
+  const { isPending: isFetchingClaimInvestigation, data: claimInvestigations } = useFetchClaimInvestigations(selectedClaimId!)
   const [fundingAmount, setFundingAmount] = useState("");
   const [isFunding, setIsFunding] = useState(false);
-
-  // Submission form state
   const [explanation, setExplanation] = useState("");
   const [sourceUrls, setSourceUrls] = useState<string[]>([""]);
   const [isSubmittingReport, setIsSubmittingReport] = useState(false);
-
-  // Search state
   const [searchQuery, setSearchQuery] = useState("");
-
-  // Fetch profile to show the user's GEN balance
-  const fetchProfile = () => {
-    if (isConnected && walletAddress) {
-      fetch(`/api/profile/${walletAddress}`)
-        .then((res) => res.json())
-        .then((data) => setUserProfile(data))
-        .catch((e) => console.error("Error fetching profile inside bounties", e));
-    }
-  };
-
-  useEffect(() => {
-    fetchProfile();
-  }, [isConnected, walletAddress]);
 
   const handleAddSourceField = () => {
     setSourceUrls([...sourceUrls, ""]);
   };
+
 
   const handleSourceUrlChange = (index: number, val: string) => {
     const updated = [...sourceUrls];
@@ -89,8 +72,6 @@ export default function BountiesPage({
       if (res.ok) {
         addToast(`Successfully funded bounty pool with ${amount} GEN!`, "success");
         setFundingAmount("");
-        fetchClaims();
-        fetchProfile();
       } else {
         const data = await res.json();
         addToast(data.error || "Failed to fund bounty", "error");
@@ -115,51 +96,24 @@ export default function BountiesPage({
     }
 
     setIsSubmittingReport(true);
-    try {
-      const res = await fetch(`/api/claims/${claimId}/submissions`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          explanation: explanation.trim(),
-          sourceUrls: sourceUrls.filter((url) => url.trim() !== ""),
-          userAddress: walletAddress
-        })
-      });
-
-      if (res.ok) {
-        addToast("Report submitted successfully! AI validator scored your research.", "success");
-        setExplanation("");
-        setSourceUrls([""]);
-        fetchClaims();
-        fetchProfile();
-      } else {
-        const data = await res.json();
-        addToast(data.error || "Failed to submit report", "error");
-      }
-    } catch (err) {
-      addToast("Network or blockchain transmission error.", "error");
-    } finally {
-      setIsSubmittingReport(false);
-    }
   };
 
-  const selectedClaim = claims.find((c) => c.id === selectedClaimId);
+  const selectedClaim = claims?.find((c) => c.claim_id === selectedClaimId);
 
   // Filter claims that have bounties or are searchable
-  const activeBountyClaims = claims.filter((c) => (c.bountyAmount || 0) > 0);
-  const displayedClaims = searchQuery.trim() === "" 
-    ? activeBountyClaims 
-    : claims.filter(c => c.title.toLowerCase().includes(searchQuery.toLowerCase()) || c.text.toLowerCase().includes(searchQuery.toLowerCase()));
+  const activeBountyClaims = claims?.filter((c) => (c.bounty_pool || 0) > 0);
+  const displayedClaims = searchQuery.trim() === ""
+    ? activeBountyClaims
+    : claims?.filter(c => c.title.toLowerCase().includes(searchQuery.toLowerCase()) || c.text.toLowerCase().includes(searchQuery.toLowerCase()));
 
   // Find the winner submission (highest score) if resolved
-  const getWinnerReport = (claim: Claim) => {
-    if (!claim.bountySubmissions || claim.bountySubmissions.length === 0) return null;
-    return [...claim.bountySubmissions].sort((a, b) => (b.score || 0) - (a.score || 0))[0];
+  const getWinnerReport = () => {
+    if (!claimInvestigations || claimInvestigations.length === 0) return null;
+    return [...claimInvestigations].sort((a, b) => (b.ai_score || 0) - (a.ai_score || 0))[0];
   };
 
   return (
     <div id="bounties-page-container" className="py-8 sm:py-12 px-4 sm:px-6 md:px-8 max-w-7xl mx-auto space-y-12">
-      
       {/* Page Header */}
       <div id="bounties-header" className="flex flex-col md:flex-row md:items-center md:justify-between gap-6 pb-6 border-b border-[#e5e5e5]">
         <div className="space-y-2">
@@ -177,7 +131,7 @@ export default function BountiesPage({
             <div className="border border-black bg-white px-5 py-3 font-mono text-xs flex flex-col gap-1">
               <span className="text-[#6b7280] uppercase tracking-wider text-[10px]">Your Wallet Balance</span>
               <span className="text-sm font-bold text-[#0a0a0a]">
-                {userProfile?.genBalance?.toLocaleString() || "0"} GEN
+                {"0"} GEN
               </span>
             </div>
           ) : (
@@ -193,7 +147,7 @@ export default function BountiesPage({
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        
+
         {/* Left 1/3: List of Bounties */}
         <div className="lg:col-span-1 space-y-6">
           <div className="space-y-4">
@@ -217,26 +171,25 @@ export default function BountiesPage({
           </div>
 
           <div id="bounties-list" className="space-y-4 max-h-[600px] overflow-y-auto pr-2">
-            {displayedClaims.length > 0 ? (
-              displayedClaims.map((claim) => {
-                const isActive = claim.id === selectedClaimId;
-                const winner = getWinnerReport(claim);
-                const subCount = claim.bountySubmissions?.length || 0;
+            {displayedClaims?.length > 0 ? (
+              displayedClaims?.map((claim) => {
+                const isActive = claim.claim_id === selectedClaimId;
+                const winner = getWinnerReport();
+                const subCount = claimInvestigations?.length || 0;
 
                 return (
                   <button
-                    key={claim.id}
-                    id={`bounty-card-${claim.id}`}
+                    key={claim.claim_id}
+                    id={`bounty-card-${claim.claim_id}`}
                     onClick={() => {
-                      setSelectedClaimId(claim.id);
+                      setSelectedClaimId(claim.claim_id);
                       setExplanation("");
                       setSourceUrls([""]);
                     }}
-                    className={`w-full text-left p-5 border transition-all ${
-                      isActive 
-                        ? "border-black bg-[#fdfdfd] ring-1 ring-black shadow-xs" 
+                    className={`w-full text-left p-5 border transition-all ${isActive
+                        ? "border-black bg-[#fdfdfd] ring-1 ring-black shadow-xs"
                         : "border-[#e5e5e5] bg-white hover:border-black"
-                    }`}
+                      }`}
                   >
                     <div className="flex justify-between items-start gap-4 mb-3">
                       <span className="text-[10px] bg-[#f3f3f3] text-[#6b7280] px-2 py-0.5 font-mono font-bold uppercase">
@@ -244,7 +197,7 @@ export default function BountiesPage({
                       </span>
                       <span className="font-mono text-xs font-bold text-black flex items-center gap-1">
                         <DollarSign className="w-3.5 h-3.5" />
-                        {claim.bountyAmount?.toLocaleString() || "0"} GEN
+                        {claim.bounty_pool?.toLocaleString() || "0"} GEN
                       </span>
                     </div>
 
@@ -258,7 +211,7 @@ export default function BountiesPage({
                         {subCount} {subCount === 1 ? "report" : "reports"}
                       </span>
                       <span>
-                        {claim.status === "Pending" || claim.status === "Investigating" ? (
+                        {claim.status === "pending" || claim.status === "investigating" ? (
                           <span className="text-amber-600 font-bold">ACTIVE</span>
                         ) : (
                           <span className="text-green-600 font-bold">RESOLVED</span>
@@ -281,12 +234,12 @@ export default function BountiesPage({
         <div className="lg:col-span-2 space-y-6">
           {selectedClaim ? (
             <div id="selected-bounty-panel" className="border border-black bg-white p-6 sm:p-8 space-y-8">
-              
+
               {/* Claim Overview */}
               <div className="space-y-4">
                 <div className="flex flex-wrap items-center justify-between gap-4">
                   <span className="text-xs font-mono text-[#6b7280]">
-                    CLAIM ID: {selectedClaim.id}
+                    CLAIM ID: {selectedClaim.claim_id}
                   </span>
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-mono text-[#6b7280]">Status:</span>
@@ -307,7 +260,7 @@ export default function BountiesPage({
                 <div className="flex items-center justify-between p-4 bg-[#f9f9f9] border border-[#e5e5e5] font-mono text-xs">
                   <span className="text-[#6b7280]">Total Bounty Pool:</span>
                   <span className="text-sm font-bold text-[#0a0a0a]">
-                    {selectedClaim.bountyAmount?.toLocaleString() || "0"} GEN
+                    {selectedClaim.bounty_pool?.toLocaleString() || "0"} GEN
                   </span>
                 </div>
               </div>
@@ -317,7 +270,7 @@ export default function BountiesPage({
                 <h4 className="text-xs font-mono font-bold uppercase tracking-wider text-[#6b7280]">
                   Increase Bounty Pool
                 </h4>
-                <form onSubmit={(e) => handleFundBounty(e, selectedClaim.id)} className="flex gap-2 max-w-sm">
+                <form onSubmit={(e) => handleFundBounty(e, selectedClaim.claim_id)} className="flex gap-2 max-w-sm">
                   <input
                     id="fund-bounty-input"
                     type="number"
@@ -344,11 +297,11 @@ export default function BountiesPage({
               <div className="border-t border-[#e5e5e5] pt-6 space-y-6">
                 <h4 className="text-sm font-bold text-[#0a0a0a] flex items-center gap-2">
                   <Users className="w-4 h-4" />
-                  Submitted Research Reports ({selectedClaim.bountySubmissions?.length || 0})
+                  Submitted Research Reports ({claimInvestigations?.length || 0})
                 </h4>
 
                 {/* Winner Callout if resolved */}
-                {getWinnerReport(selectedClaim) && (
+                {getWinnerReport() && (
                   <div className="border border-[#16a34a] bg-[#16a34a]/5 p-5 space-y-3">
                     <div className="flex items-center justify-between">
                       <span className="text-xs font-mono font-bold text-[#16a34a] uppercase flex items-center gap-1.5">
@@ -356,7 +309,7 @@ export default function BountiesPage({
                         Highest Scored Winning Report
                       </span>
                       <span className="text-xs font-mono font-bold text-[#16a34a]">
-                        AI SCORE: {getWinnerReport(selectedClaim)?.score}/100
+                        AI SCORE: {getWinnerReport()?.ai_score}/100
                       </span>
                     </div>
 
@@ -365,13 +318,13 @@ export default function BountiesPage({
                         Researcher: <span className="font-bold">@{getWinnerReport(selectedClaim)?.username || "Anonymous"}</span> ({getWinnerReport(selectedClaim)?.submittedBy})
                       </p>
                       <p className="text-xs text-[#6b7280] italic leading-relaxed">
-                        "{getWinnerReport(selectedClaim)?.explanation}"
+                        "{selectedClaim?.explanation}"
                       </p>
-                      
-                      {getWinnerReport(selectedClaim)?.feedback && (
+
+                      {getWinnerReport()?.ai_feedback && (
                         <div className="mt-2 pt-2 border-t border-[#e5e5e5] text-[11px] text-amber-800 font-mono">
                           <span className="font-bold">AI Feedback: </span>
-                          {getWinnerReport(selectedClaim)?.feedback}
+                          {getWinnerReport()?.ai_feedback}
                         </div>
                       )}
                     </div>
@@ -380,34 +333,34 @@ export default function BountiesPage({
 
                 {/* Submissions list */}
                 <div className="space-y-4">
-                  {selectedClaim.bountySubmissions && selectedClaim.bountySubmissions.length > 0 ? (
-                    selectedClaim.bountySubmissions
-                      .filter(sub => sub.id !== getWinnerReport(selectedClaim)?.id)
+                  {claimInvestigations && claimInvestigations.length > 0 ? (
+                    claimInvestigations
+                      .filter(sub => sub.inv_id !== getWinnerReport()?.inv_id)
                       .map((sub) => (
-                        <div key={sub.id} className="border border-[#e5e5e5] p-4 space-y-3 bg-[#fafafa]">
+                        <div key={sub.inv_id} className="border border-[#e5e5e5] p-4 space-y-3 bg-[#fafafa]">
                           <div className="flex justify-between items-start">
                             <div className="space-y-0.5">
                               <span className="text-xs font-bold text-[#0a0a0a] block">
-                                @{sub.username || "Anonymous"}
+                                @{sub?.username || "Anonymous"}
                               </span>
                               <span className="text-[10px] font-mono text-[#6b7280]">
-                                Address: {sub.submittedBy.slice(0, 8)}...{sub.submittedBy.slice(-6)}
+                                Address: {sub.investigator.slice(0, 8)}...{sub.investigator.slice(-6)}
                               </span>
                             </div>
                             <span className="text-xs font-mono font-bold bg-[#f3f3f3] text-[#0a0a0a] px-2.5 py-1">
-                              AI SCORE: {sub.score}/100
+                              AI SCORE: {sub.ai_score}/100
                             </span>
                           </div>
 
                           <p className="text-xs text-[#6b7280] leading-relaxed">
-                            {sub.explanation}
+                            {sub.ai_feedback}
                           </p>
 
-                          {sub.sourceUrls && sub.sourceUrls.length > 0 && (
+                          {sub.evidence_urls && sub.evidence_urls.length > 0 && (
                             <div className="space-y-1 pt-1">
                               <span className="text-[10px] font-mono text-[#6b7280] block uppercase tracking-wider">Citations:</span>
                               <div className="flex flex-wrap gap-2">
-                                {sub.sourceUrls.map((url, uidx) => (
+                                {sub.evidence_urls.map((url, uidx) => (
                                   <a
                                     key={uidx}
                                     href={url}
@@ -423,15 +376,15 @@ export default function BountiesPage({
                             </div>
                           )}
 
-                          {sub.feedback && (
+                          {sub.ai_feedback && (
                             <div className="text-[11px] font-mono text-[#6b7280] bg-white border border-dashed border-[#e5e5e5] p-2.5">
-                              <span className="font-bold text-[#0a0a0a]">AI Review:</span> {sub.feedback}
+                              <span className="font-bold text-[#0a0a0a]">AI Review:</span> {sub.ai_feedback}
                             </div>
                           )}
                         </div>
                       ))
                   ) : (
-                    !getWinnerReport(selectedClaim) && (
+                    !getWinnerReport() && (
                       <p className="text-xs font-mono text-[#6b7280] italic">
                         No research reports have been submitted for this bounty yet.
                       </p>
@@ -441,17 +394,17 @@ export default function BountiesPage({
               </div>
 
               {/* Submit Report Form */}
-              {selectedClaim.status === "Pending" || selectedClaim.status === "Investigating" ? (
+              {selectedClaim.status === "pending" || selectedClaim.status === "investigating" ? (
                 <div className="border-t border-[#e5e5e5] pt-6 space-y-4">
                   <h4 className="text-sm font-bold text-[#0a0a0a] flex items-center gap-2">
                     <Send className="w-4 h-4" />
                     Submit Your Investigation Report
                   </h4>
                   <p className="text-xs text-[#6b7280]">
-                    Submit evidence and reasoning to compete for the {selectedClaim.bountyAmount?.toLocaleString()} GEN bounty. On-chain AI algorithms analyze and score reports.
+                    Submit evidence and reasoning to compete for the {selectedClaim.bounty_pool?.toLocaleString()} GEN bounty. On-chain AI algorithms analyze and score reports.
                   </p>
 
-                  <form onSubmit={(e) => handleSubmitReport(e, selectedClaim.id)} className="space-y-4">
+                  <form onSubmit={(e) => handleSubmitReport(e, selectedClaim.claim_id)} className="space-y-4">
                     <div className="space-y-1.5">
                       <label className="text-xs font-mono text-[#6b7280] block uppercase tracking-wider">
                         Detailed Explanation

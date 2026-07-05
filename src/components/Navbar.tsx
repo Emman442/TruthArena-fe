@@ -1,9 +1,16 @@
 import { useState } from "react";
-import { Menu, X, Wallet, ChevronDown } from "lucide-react";
+import { Menu, X, Wallet, ChevronDown, User } from "lucide-react";
+import { success, error, userRejected } from "@/src/utils/toast";
+import { getAddress } from "viem"
+
 
 interface NavbarProps {
   isConnected: boolean;
   walletAddress: string;
+  isMetaMaskInstalled: boolean;
+  connectWallet: () => Promise<void>;
+  disconnectWallet: () => void;
+  switchWalletAccount: () => Promise<void>;
   onConnectClick: () => void;
   onDisconnect: () => void;
   currentPath: string;
@@ -12,7 +19,11 @@ interface NavbarProps {
 
 export default function Navbar({
   isConnected,
-  walletAddress,
+  walletAddress: LowerCaseAddress,
+  isMetaMaskInstalled,
+  connectWallet,
+  disconnectWallet,
+  switchWalletAccount,
   onConnectClick,
   onDisconnect,
   currentPath,
@@ -20,6 +31,38 @@ export default function Navbar({
 }: NavbarProps) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [connectionError, setConnectionError] = useState("");
+  const [isConnecting, setIsConnecting] = useState(false);
+  const [isSwitching, setIsSwitching] = useState(false);
+  const walletAddress = LowerCaseAddress ? getAddress(LowerCaseAddress) : "";
+
+  const handleConnect = async () => {
+    if (!isMetaMaskInstalled) {
+      return;
+    }
+
+    try {
+      setIsConnecting(true);
+      setConnectionError("");
+      await connectWallet();
+      setIsModalOpen(false);
+    } catch (err: any) {
+      console.error("Failed to connect wallet:", err);
+      setConnectionError(err.message || "Failed to connect to MetaMask");
+
+      if (err.message?.includes("rejected")) {
+        userRejected("Connection cancelled");
+      } else {
+        error("Failed to connect wallet", {
+          description: err.message || "Check your MetaMask and try again."
+        });
+      }
+    } finally {
+      setIsConnecting(false);
+    }
+  };
+
 
   const truncateAddress = (addr: string) => {
     if (!addr) return "";
@@ -56,23 +99,21 @@ export default function Navbar({
           <button
             id="nav-explore"
             onClick={() => handleLinkClick("claims")}
-            className={`font-medium text-sm transition-colors ${
-              currentPath === "claims" ? "text-[#0a0a0a] underline underline-offset-4" : "text-[#6b7280] hover:text-[#0a0a0a]"
-            }`}
+            className={`font-medium text-sm transition-colors ${currentPath === "claims" ? "text-[#0a0a0a] underline underline-offset-4" : "text-[#6b7280] hover:text-[#0a0a0a]"
+              }`}
           >
             Explore Claims
           </button>
           <button
             id="nav-submit"
             onClick={() => handleLinkClick("submit")}
-            className={`font-medium text-sm transition-colors ${
-              currentPath === "submit" ? "text-[#0a0a0a] underline underline-offset-4" : "text-[#6b7280] hover:text-[#0a0a0a]"
-            }`}
+            className={`font-medium text-sm transition-colors ${currentPath === "submit" ? "text-[#0a0a0a] underline underline-offset-4" : "text-[#6b7280] hover:text-[#0a0a0a]"
+              }`}
           >
             Submit Claim
           </button>
 
-          <button
+          {/* <button
             id="nav-bounties"
             onClick={() => handleLinkClick("bounties")}
             className={`font-medium text-sm transition-colors ${
@@ -80,14 +121,13 @@ export default function Navbar({
             }`}
           >
             Investigation Bounties
-          </button>
+          </button> */}
 
           <button
             id="nav-markets"
             onClick={() => handleLinkClick("markets")}
-            className={`font-medium text-sm transition-colors ${
-              currentPath === "markets" ? "text-[#0a0a0a] underline underline-offset-4" : "text-[#6b7280] hover:text-[#0a0a0a]"
-            }`}
+            className={`font-medium text-sm transition-colors ${currentPath === "markets" ? "text-[#0a0a0a] underline underline-offset-4" : "text-[#6b7280] hover:text-[#0a0a0a]"
+              }`}
           >
             Truth Markets
           </button>
@@ -130,11 +170,13 @@ export default function Navbar({
             </div>
           ) : (
             <button
+              onClick={handleConnect}
               id="connect-wallet-btn"
-              onClick={onConnectClick}
-              className="px-4 py-2 text-xs font-mono font-medium border border-black text-[#0a0a0a] bg-transparent hover:bg-[#f3f3f3] transition-colors"
+              className="flex gap-2 items-center px-4 py-2 text-xs font-mono font-medium border border-black text-[#0a0a0a] bg-transparent hover:bg-[#f3f3f3] transition-colors"
+              disabled={isConnecting}
             >
-              Connect Wallet
+              <User className="w-5 h-5 mr-2" />
+              {isConnecting ? "Connecting..." : "Connect MetaMask"}
             </button>
           )}
         </div>

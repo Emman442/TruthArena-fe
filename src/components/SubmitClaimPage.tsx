@@ -24,6 +24,7 @@ export default function SubmitClaimPage({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const { isPending: isSubmittingClaim, mutate: SubmitClaim } = useSubmitClaim()
 
+  console.log(walletAddress)
   const handleAddSource = () => {
     setSourceUrls([...sourceUrls, ""]);
   };
