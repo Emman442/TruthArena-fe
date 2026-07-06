@@ -74,8 +74,6 @@ class TruthArena {
                 args: [wallet_address],
             });
 
-            console.log("profile: ", profile)
-
             return profile as UserProfile;
         } catch (error) {
             console.error("Error fetching user profile:", error);

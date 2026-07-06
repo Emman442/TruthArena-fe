@@ -1,8 +1,9 @@
 import React, { useState } from "react";
-import { TrendingUp, Shield, ArrowUpRight, CheckCircle, Gift, RefreshCw } from "lucide-react";
+import { TrendingUp, Shield, ArrowUpRight, CheckCircle, Gift, RefreshCw, XCircle, AlertCircle } from "lucide-react";
 import { Claim } from "../types";
 import { useFetchClaimPositions, useFetchClaims, usePlaceBet } from "../hooks/TruthArena";
-import {getAddress} from "viem"
+import { getAddress } from "viem";
+
 interface MarketsPageProps {
   claims: Claim[];
   isConnected: boolean;
@@ -23,30 +24,27 @@ export default function MarketsPage({
   const { data: claims } = useFetchClaims();
   const { data: claimPositions } = useFetchClaimPositions(selectedClaimId || "");
   const walletAddress = LowerCaseAddress ? getAddress(LowerCaseAddress) : "";
-  // Staking form state
   const [stakeAmount, setStakeAmount] = useState("");
   const [stakePrediction, setStakePrediction] = useState<'support' | 'challenge'>('support');
   const { isPending: isPlacingBet, mutate: placeBet } = usePlaceBet();
-
   const selectedClaim = claims?.find((c) => c.claim_id === selectedClaimId);
-
-
-  const isMarketFullyResolved = selectedClaim?.status === "resolved" || selectedClaim?.market_status === "resolved";
-  const activeMarkets = claims?.filter(c => (c.status === "pending" || c.status === "investigating") && c.market_status === "open");
-  const resolvedMarkets = claims?.filter(c => c.status !== "pending" && c.status !== "investigating");
-
-  // Calculate market stats helper
+  const activeMarkets = claims?.filter(c => c.market_status === "open" && Date.now() < (c.market_deadline || 0));
+  const resolvedMarkets = claims?.filter(c => c.market_status === "resolved" || c.status === "resolved" || Date.now() >= (c.market_deadline || 0));
   const getMarketStats = (claim: Claim) => {
     const sPool = claim?.support_pool || 0;
     const cPool = claim?.challenge_pool || 0;
     const total = sPool + cPool;
     const sPct = total === 0 ? 50 : Math.round((sPool / total) * 100);
     const cPct = total === 0 ? 50 : 100 - sPct;
-
-    // Get user stakes in this market
     const userStakes = claimPositions?.filter(
-      s => s.participant.toLowerCase() === walletAddress.toLowerCase()
+      s => walletAddress && s.participant?.toLowerCase() === walletAddress.toLowerCase()
     ) || [];
+    let outcomeLabel = "Pending Consensus";
+    if (claim.market_status === "resolved") {
+      if (claim.market_outcome === "verified") outcomeLabel = "Verified (Support Wins)";
+      else if (claim.market_outcome === "false") outcomeLabel = "False (Challenge Wins)";
+      else outcomeLabel = `Resolved as ${claim.market_outcome?.toUpperCase()}`;
+    }
 
     return {
       sPool,
@@ -55,11 +53,9 @@ export default function MarketsPage({
       sPct,
       cPct,
       userStakes,
+      outcomeLabel
     };
   };
-
-
-  console.log(claimPositions);
 
   const handlePlaceStake = async (e: React.FormEvent, claimId: string) => {
     e.preventDefault();
@@ -90,15 +86,6 @@ export default function MarketsPage({
       }
     });
   };
-
-  //   console.log(selectedClaim);
-  //   console.log("Debug Times:", {
-  //   currentTime: Date.now(),
-  //   marketDeadline: selectedClaim?.market_deadline,
-  //   isExpired: Date.now() >= (selectedClaim?.market_deadline || 0),
-  //   marketStatus: selectedClaim?.market_status,
-  //   formatted:selectedClaim ? new Date(selectedClaim.market_deadline).toLocaleString() : "N/A"
-  // });
 
   return (
     <div id="markets-page-container" className="py-8 sm:py-12 px-4 sm:px-6 md:px-8 max-w-7xl mx-auto space-y-12">
@@ -156,7 +143,6 @@ export default function MarketsPage({
                         {claim.title}
                       </h4>
 
-                      {/* Staking Odds visual split */}
                       <div className="space-y-1.5">
                         <div className="flex justify-between text-[11px] font-mono text-[#6b7280]">
                           <span>{stats.sPct}% Support</span>
@@ -186,14 +172,14 @@ export default function MarketsPage({
           {/* Resolved Markets Section */}
           <div className="space-y-4 pt-4 border-t border-[#e5e5e5]">
             <h3 className="text-sm font-mono font-bold uppercase tracking-wider text-[#6b7280]">
-              Resolved Markets
+              Ended & Resolved Markets
             </h3>
 
             <div id="resolved-markets-list" className="space-y-4">
               {resolvedMarkets && resolvedMarkets.length > 0 ? (
                 resolvedMarkets.map((claim) => {
                   const isActive = claim.claim_id === selectedClaimId;
-                  const winner = claim.status === "verified" ? "support" : "challenge";
+                  const stats = getMarketStats(claim);
 
                   return (
                     <button
@@ -210,9 +196,9 @@ export default function MarketsPage({
                       </h4>
 
                       <div className="flex justify-between items-center text-[10px] font-mono">
-                        <span className="text-[#6b7280]">Winner:</span>
-                        <span className="font-bold text-green-600 uppercase">
-                          {winner} ({claim.status})
+                        <span className="text-[#6b7280]">Outcome:</span>
+                        <span className={`font-bold uppercase ${claim.market_status === 'resolved' ? 'text-green-600' : 'text-amber-600'}`}>
+                          {stats.outcomeLabel}
                         </span>
                       </div>
                     </button>
@@ -232,7 +218,7 @@ export default function MarketsPage({
             const stats = getMarketStats(selectedClaim);
             const isExpired = Date.now() >= (selectedClaim.market_deadline || 0);
             const isMarketActive = selectedClaim.market_status === "open" && !isExpired;
-            const resolvedWinner = selectedClaim.status === "verified" ? "support" : "challenge";
+            const isMarketResolved = selectedClaim.market_status === "resolved";
 
             return (
               <div id="selected-market-panel" className="border border-black bg-white p-6 sm:p-8 space-y-8">
@@ -243,8 +229,10 @@ export default function MarketsPage({
                     <span className="text-xs font-mono text-[#6b7280]">
                       MARKET ID: {selectedClaim.claim_id}
                     </span>
-                    <span className={`text-[10px] font-mono font-bold px-2 py-0.5 uppercase ${isMarketActive ? "bg-amber-100 text-amber-800" : "bg-green-100 text-green-800"}`}>
-                      {isMarketActive ? "Active Betting" : "Market Closed"}
+                    <span className={`text-[10px] font-mono font-bold px-2 py-0.5 uppercase ${
+                      isMarketActive ? "bg-amber-100 text-amber-800" : isMarketResolved ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-800"
+                    }`}>
+                      {isMarketActive ? "Active Betting" : isMarketResolved ? "Market Resolved" : "Awaiting Consensus"}
                     </span>
                   </div>
 
@@ -258,7 +246,7 @@ export default function MarketsPage({
                 </div>
 
                 {/* Pool Ratio Board */}
-                <div className="border border-[#e5e5e5] bg-[#fafafa] p-6 space-y-6">
+                <div className="border border-black bg-[#fafafa] p-6 space-y-6">
                   <h4 className="text-xs font-mono font-bold uppercase tracking-wider text-[#6b7280]">
                     On-Chain Staking Ratios
                   </h4>
@@ -285,7 +273,6 @@ export default function MarketsPage({
                     </div>
                   </div>
 
-                  {/* Styled ratio bar */}
                   <div className="space-y-1.5 pt-2">
                     <div className="w-full h-4 flex bg-[#e5e5e5]">
                       <div className="h-full bg-black text-[10px] font-mono font-bold text-white flex items-center justify-center" style={{ width: `${stats.sPct}%` }}>
@@ -302,25 +289,62 @@ export default function MarketsPage({
                   </div>
                 </div>
 
-                {/* User Stakes overview */}
+                {/* Verdict Reasoning Board if resolved */}
+                {isMarketResolved && selectedClaim.verdict_reasoning && (
+                  <div className="p-5 border border-black bg-gray-50 space-y-2">
+                    <h4 className="text-xs font-mono font-bold uppercase tracking-wider flex items-center gap-1.5 text-black">
+                      <AlertCircle className="w-4 h-4" /> Genlayer Validator Verdict Reasoning
+                    </h4>
+                    <p className="text-xs text-[#4b5563] leading-relaxed font-mono">
+                      {selectedClaim.verdict_reasoning}
+                    </p>
+                  </div>
+                )}
+
+                {/* User Stakes overview with Payouts */}
                 <div className="border-t border-[#e5e5e5] pt-6 space-y-4">
                   <h4 className="text-xs font-mono font-bold uppercase tracking-wider text-[#6b7280]">
-                    Your Staking Positions
+                    Your Staking Positions & Claims
                   </h4>
 
                   {stats.userStakes.length > 0 ? (
                     <div className="space-y-2 font-mono text-xs">
-                      {stats.userStakes.map((stake: any) => (
-                        <div key={stake.position_id} className="flex justify-between items-center bg-[#fafafa] border border-[#e5e5e5] px-4 py-3">
-                          <span className="flex items-center gap-1.5 font-bold">
-                            <Shield className="w-3.5 h-3.5" />
-                            Staked on {stake.position === "support" ? "Verified Outcome" : "False/Misleading Outcome"}
-                          </span>
-                          <div className="flex items-center gap-4">
-                            <span>{stake.stake_gen.toLocaleString()} GEN</span>
+                      {stats.userStakes.map((stake: any) => {
+                        return (
+                          <div key={stake.position_id} className="flex flex-col sm:flex-row sm:justify-between sm:items-center bg-[#fafafa] border border-[#e5e5e5] px-4 py-3 gap-2">
+                            <span className="flex items-center gap-1.5 font-bold text-[#0a0a0a]">
+                              <Shield className="w-3.5 h-3.5" />
+                              Staked on {stake.position === "support" ? "Verified" : "False/Misleading"}
+                            </span>
+                            
+                            <div className="flex items-center justify-between sm:justify-end gap-6 w-full sm:w-auto">
+                              <div className="text-right">
+                                <span className="text-[#6b7280] block text-[10px]">INITIAL STAKE</span>
+                                <span className="font-bold text-[#0a0a0a]">{stake.stake_gen.toLocaleString()} GEN</span>
+                              </div>
+
+                              {isMarketResolved && (
+                                <div className="text-right border-l border-[#e5e5e5] pl-4">
+                                  <span className="text-[#6b7280] block text-[10px]">PAYOUT RESULT</span>
+                                  {stake.won ? (
+                                    <span className="font-bold text-green-600 flex items-center gap-1">
+                                      <CheckCircle className="w-3.5 h-3.5 inline" /> +{stake.payout} GEN
+                                    </span>
+                                  ) : selectedClaim.market_outcome === "unverified" ? (
+                                    <span className="font-bold text-amber-600">
+                                      Returned: {stake.payout} GEN
+                                    </span>
+                                  ) : (
+                                    <span className="font-bold text-red-600 flex items-center gap-1">
+                                      <XCircle className="w-3.5 h-3.5 inline" /> 0 GEN (Lost)
+                                    </span>
+                                  )}
+                                </div>
+                              )}
+                            </div>
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   ) : (
                     <p className="text-xs font-mono text-[#6b7280] italic">
@@ -329,7 +353,7 @@ export default function MarketsPage({
                   )}
                 </div>
 
-                {/* Interactive Staking / Expiration States Panel */}
+                {/* Interactive Action Forms based on Exact State machine */}
                 {isMarketActive ? (
                   <div className="border-t border-[#e5e5e5] pt-6 space-y-4">
                     <h4 className="text-sm font-bold text-[#0a0a0a]">
@@ -337,7 +361,6 @@ export default function MarketsPage({
                     </h4>
 
                     <form onSubmit={(e) => handlePlaceStake(e, selectedClaim.claim_id)} className="space-y-4">
-                      {/* Selector toggle */}
                       <div className="grid grid-cols-2 gap-3">
                         <button
                           type="button"
@@ -357,11 +380,10 @@ export default function MarketsPage({
                             : "border-[#e5e5e5] text-black hover:border-black bg-white"
                             }`}
                         >
-                          CHALLENGE OUTCOME (FALSE/MISLEADING)
+                          CHALLENGE OUTCOME (FALSE)
                         </button>
                       </div>
 
-                      {/* Amount Box */}
                       <div className="space-y-1.5">
                         <label className="text-[10px] font-mono text-[#6b7280] block uppercase tracking-wider">
                           Stake Amount (GEN)
@@ -400,19 +422,21 @@ export default function MarketsPage({
                       </div>
                     </form>
                   </div>
-                ) : isExpired && selectedClaim.market_status !== "resolved" ? (
+                ) : (
                   <div className="border-t border-[#e5e5e5] pt-6">
-                    <div className="border border-amber-500 bg-amber-50/40 p-5 text-center space-y-2">
-                      <div className="inline-flex items-center gap-2 text-amber-700 font-mono font-bold text-xs uppercase tracking-wider">
-                        <RefreshCw className="w-4 h-4 animate-pulse" />
-                        Market Ended — Consensus Processing
+                    <div className={`border p-5 text-center space-y-2 ${isMarketResolved ? "border-green-500 bg-green-50/30" : "border-amber-500 bg-amber-50/40"}`}>
+                      <div className={`inline-flex items-center gap-2 font-mono font-bold text-xs uppercase tracking-wider ${isMarketResolved ? "text-green-700" : "text-amber-700"}`}>
+                        {isMarketResolved ? <CheckCircle className="w-4 h-4" /> : <RefreshCw className="w-4 h-4 animate-spin" />}
+                        {isMarketResolved ? `Market Finalized — Result: ${stats.outcomeLabel}` : "Market Ended — Processing Consensus"}
                       </div>
                       <p className="text-xs text-[#6b7280] max-w-md mx-auto leading-relaxed">
-                        The staking window closed at <b>{new Date(selectedClaim?.market_deadline).toLocaleString()}</b>. Staking is now locked while GenLayer validators compute the final verdict.
+                        {isMarketResolved 
+                          ? `This market successfully resolved at ${new Date(selectedClaim.resolved_at!).toLocaleString()}. Payout claims are processed based on your winning stakes.`
+                          : `The staking window closed at ${new Date(selectedClaim.market_deadline).toLocaleString()}. Staking is now locked while GenLayer validators compute the final consensus.`}
                       </p>
                     </div>
                   </div>
-                ) : null}
+                )}
               </div>
             );
           })() : (

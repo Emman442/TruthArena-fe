@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Copy, Check, ExternalLink, ShieldCheck, HelpCircle, Clock } from "lucide-react";
 import { Claim } from "../types";
-import { useFetchFactCheckResult, useInvestigateClaim, useOpenTruthMarket, useResolveTruthMarket } from "../hooks/TruthArena";
+import { useFetchClaimPositions, useFetchFactCheckResult, useInvestigateClaim, useOpenTruthMarket, useResolveTruthMarket } from "../hooks/TruthArena";
 import { SelectContent, SelectTrigger, SelectValue, SelectItem, Select } from "./Select";
 import { Label } from "./Label";
 
@@ -22,10 +22,10 @@ export default function ClaimDetailPage({
   const [deadlineSeconds, setDeadlineSeconds] = useState(0);
   const { isPending: isInvestigatingClaim, mutate: investigateClaim } = useInvestigateClaim()
   const { isPending: isFetchingResults, data: FactCheckResults } = useFetchFactCheckResult(claim.claim_id)
-  // const {isPending: isFunding, mutate: fundBounty} = useInvestigateClaim()
   const { isPending: isOpeningMarket, mutate: openMarket } = useOpenTruthMarket()
-  // Add your resolve hook import alongside the others
+
   const { isPending: isResolvingMarket, mutate: resolveMarket } = useResolveTruthMarket();
+    const { data: claimPositions } = useFetchClaimPositions(claim.claim_id);
   const handleCopy = () => {
     navigator.clipboard.writeText(claim.submitter);
     setCopied(true);
@@ -35,12 +35,6 @@ export default function ClaimDetailPage({
   const handleInvestigateClaim = () => {
     investigateClaim({ claim_id: claim.claim_id }, { onSuccess: () => { addToast("Claim investigation initiated.", "success") }, onError: () => { addToast("Failed to initiate claim investigation.", "error") } })
   }
-
-
-  // const handleFundBounty = (e: React.FormEvent<HTMLFormElement>) => {
-  //   e.preventDefault();
-  //   // Implement the logic to fund the bounty here
-  // }
 
   const handleOpenMarket = () => {
     if (!deadlineSeconds || deadlineSeconds <= 0) {
@@ -129,13 +123,11 @@ export default function ClaimDetailPage({
         </span>
       </div>
 
-      {/* Two Column Desktop Layout */}
       <div id="detail-grid" className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
 
-        {/* LEFT COLUMN: 65% width (8 grid columns) */}
+
         <div id="left-column" className="lg:col-span-8 space-y-8">
 
-          {/* Status/Verdict Banner */}
           <div id="status-verdict-banner" className={`w-full p-4 font-mono ${styles.banner}`}>
             {isResolved ? (
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-sm">
@@ -160,7 +152,6 @@ export default function ClaimDetailPage({
             )}
           </div>
 
-          {/* Full Claim Text */}
           <div id="claim-text-block" className="space-y-3">
             <span id="label-claim" className="text-[11px] font-mono text-[#6b7280] uppercase tracking-wider font-bold block">
               Claim
@@ -220,7 +211,6 @@ export default function ClaimDetailPage({
             )}
           </div>
 
-          {/* AI Verdict Reasoning section (only if resolved) */}
           {isResolved && FactCheckResults && (
             <div id="ai-verdict-reasoning-block" className="space-y-6 pt-6 border-t border-[#e5e5e5]">
               <div className="space-y-3">
@@ -263,10 +253,8 @@ export default function ClaimDetailPage({
           )}
         </div>
 
-        {/* RIGHT COLUMN: 35% width (4 grid columns) - Sticky Status Panel */}
         <div id="right-column" className="lg:col-span-4 lg:sticky lg:top-[74px] space-y-6">
 
-          {/* Status Summary Card */}
           <div id="status-card" className="border border-black p-5 bg-white space-y-4">
             <h4 className="text-xs font-mono font-bold uppercase tracking-wider text-[#6b7280] pb-2 border-b border-[#e5e5e5]">
               Status Card
@@ -386,7 +374,7 @@ export default function ClaimDetailPage({
 
                   {/* Resolve Action Button Block */}
                   {(() => {
-                    const currentUnixSeconds = Math.floor(Date.now() / 1000);
+                    const currentUnixSeconds = Math.floor(Date.now() );
                     const deadlineReached = claim.market_deadline ? currentUnixSeconds >= claim.market_deadline : false;
 
                     const handleResolveMarket = () => {
@@ -403,16 +391,16 @@ export default function ClaimDetailPage({
                       <div className="space-y-1.5">
                         <button
                           id="resolve-truth-market-btn"
-                          disabled={!deadlineReached || isResolvingMarket}
+                          disabled={!deadlineReached || isResolvingMarket || claimPositions?.length === 0}
                           onClick={handleResolveMarket}
-                          className="w-full py-2.5 bg-[#7c3aed] text-white font-mono text-xs font-bold hover:opacity-90 transition-opacity disabled:opacity-40 disabled:hover:opacity-100 disabled:cursor-not-allowed"
+                          className="w-full py-2.5 bg-[#7c3aed] cursor-pointer text-white font-mono text-xs font-bold hover:opacity-90 transition-opacity disabled:opacity-40 disabled:hover:opacity-100 disabled:cursor-not-allowed"
                         >
                           {isResolvingMarket ? "Resolving Market Pool..." : "Resolve Truth Market"}
                         </button>
 
                         {!deadlineReached && claim.market_deadline && (
                           <p className="text-[10px] font-mono text-amber-600 text-center flex items-center justify-center gap-1">
-                            🔒 Locked until: {new Date(claim.market_deadline * 1000).toLocaleString()}
+                             Locked until: {new Date(claim.market_deadline).toLocaleString()}
                           </p>
                         )}
                       </div>
@@ -420,12 +408,10 @@ export default function ClaimDetailPage({
                   })()}
                 </div>
               ) : !isOwner ? (
-                /* Case 2: Market is closed, but current user is NOT the owner */
                 <div className="w-full p-3 bg-amber-50 border border-amber-200 text-amber-800 font-mono text-[11px] text-center">
                   ⚠️ Only the claim creator can initialize this market pool.
                 </div>
               ) : (
-                /* Case 3: Market is closed and current user IS the owner -> Show Open Market Config */
                 <>
                   <div className="space-y-2">
                     <Label className="text-xs font-black uppercase tracking-widest text-muted-foreground flex items-center gap-1">
@@ -440,7 +426,6 @@ export default function ClaimDetailPage({
                         <SelectValue placeholder="Select duration" />
                       </SelectTrigger>
 
-                      {/* Content goes directly here, not wrapped inside another trigger */}
                       <SelectContent>
                         {Object.entries(DURATIONS).map(([label, value]) => (
                           <SelectItem key={value} value={value.toString()}>

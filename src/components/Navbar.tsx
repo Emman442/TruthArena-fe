@@ -85,7 +85,7 @@ export default function Navbar({
       className="sticky top-0 z-40 w-full bg-white border-b border-[#e5e5e5] px-4 py-3 sm:px-6 md:px-8"
     >
       <div className="max-w-7xl mx-auto flex items-center justify-between">
-        {/* Left: Brand Wordmark */}
+        
         <button
           id="nav-brand"
           onClick={() => handleLinkClick("home")}
@@ -94,7 +94,6 @@ export default function Navbar({
           TruthArena
         </button>
 
-        {/* Center/Right Desktop Navigation */}
         <div id="desktop-nav" className="hidden lg:flex items-center gap-6">
           <button
             id="nav-explore"
@@ -133,7 +132,6 @@ export default function Navbar({
           </button>
         </div>
 
-        {/* Right Desktop Action Button / Account pill */}
         <div id="desktop-actions" className="hidden lg:flex items-center gap-3">
           {isConnected ? (
             <div className="relative">
@@ -191,7 +189,6 @@ export default function Navbar({
         </button>
       </div>
 
-      {/* Mobile Drawer Overlay & Content */}
       {isMobileMenuOpen && (
         <div
           id="mobile-drawer-overlay"
