@@ -1,8 +1,6 @@
 import { useState, useEffect } from "react";
 import { Routes, Route, useNavigate, useLocation } from "react-router-dom"; // <-- New Hooks!
 import { Claim, Category } from "./types";
-
-// Component imports
 import Navbar from "./components/Navbar";
 import LandingPage from "./components/LandingPage";
 import ExploreClaimsPage from "./components/ExploreClaimsPage";
@@ -15,20 +13,16 @@ import ToastContainer, { Toast } from "./components/ToastContainer";
 import { useParams } from "react-router-dom";
 import { useCheckIfProfileExists, useFetchClaim, useFetchClaims } from "./hooks/TruthArena";
 import ProfileSetupModal from "./components/ProfileSetupModal";
-import { useWallet } from "./lib/genlayer/wallet";
 import { getAddress } from "viem";
+import { useAccount, useDisconnect } from "wagmi";
 
 export default function App() {
-  const wallet = useWallet();
   const navigate = useNavigate();
   const location = useLocation();
-  const { address: LowerCaseAddress, isConnected, isMetaMaskInstalled,
-    isOnCorrectNetwork,
-    isLoading,
-    connectWallet,
-    disconnectWallet,
-    switchWalletAccount, } = wallet
-  const walletAddress = LowerCaseAddress ? getAddress(LowerCaseAddress) : "";
+  const { address: rawAddress, isConnected, isConnecting: isLoading } = useAccount();
+  const { disconnect } = useDisconnect();
+
+  const walletAddress = rawAddress ? getAddress(rawAddress) : "";
   const { isLoading: isProfileLoading, data: profileExists } = useCheckIfProfileExists(walletAddress || null);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const { isPending: isFetchingClaims, data: claims } = useFetchClaims()
@@ -90,14 +84,11 @@ export default function App() {
   return (
     <div id="trutharena-app" className="min-h-screen bg-white text-[#0a0a0a] font-sans flex flex-col antialiased">
       <Navbar
-        isConnected={isConnected}
-        walletAddress={walletAddress}
-        isMetaMaskInstalled={isMetaMaskInstalled}
-        connectWallet={connectWallet}
-        onConnectClick={connectWallet}
-        onDisconnect={disconnectWallet}
-        currentPath={location.pathname.replace("/", "") || "home"} // maps cleanly to your active highlights
-        onNavigate={(path) => navigate(`/${path}`)} // changes routes declaratively
+        isConnected={isConnected} 
+        walletAddress={walletAddress} 
+        onDisconnect={disconnect}
+        currentPath={location.pathname.replace("/", "") || "home"} 
+        onNavigate={(path) => navigate(`/${path}`)}
       />
 
       {/* Profile Verification Overlay Lock */}
@@ -128,7 +119,7 @@ export default function App() {
             <Route path="/" element={<LandingPage onNavigate={(path) => navigate(`/${path}`)} />} />
             <Route path="/claims" element={<ExploreClaimsPage claims={claims} onNavigate={(path) => navigate(`/${path}`)} isLoading={isFetchingClaims} />} />
             <Route path="/claims/:id" element={<ClaimDetailWrapper />} />
-            <Route path="/submit" element={<SubmitClaimPage isConnected={isConnected} walletAddress={walletAddress} onConnectClick={connectWallet} addToast={addToast} />} />
+            <Route path="/submit" element={<SubmitClaimPage isConnected={isConnected} walletAddress={walletAddress} addToast={addToast} />} />
             <Route path="/profile" element={<ProfilePage isConnected={isConnected} walletAddress={walletAddress} onNavigate={(path) => navigate(`/${path}`)} addToast={addToast} />} />
             <Route path="/bounties" element={<BountiesPage addToast={addToast} isConnected={isConnected} walletAddress={walletAddress} onNavigate={(path) => navigate(`/${path}`)} />} />
             <Route path="/markets" element={<MarketsPage addToast={addToast} isConnected={isConnected} walletAddress={walletAddress} onNavigate={(path) => navigate(`/${path}`)} />} />

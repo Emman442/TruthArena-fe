@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useCreateProfile } from "../hooks/TruthArena";
 import { toast } from "sonner";
-
 import { Input } from "./Input";
 import Modal from "./modal";
 import {getAddress} from "viem"

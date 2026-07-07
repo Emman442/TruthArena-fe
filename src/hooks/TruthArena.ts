@@ -5,16 +5,15 @@ import { useMemo } from "react";
 import TruthArena from "@/src/lib/contract/TruthArena"
 import { getContractAddress } from "../lib/genlayer/client";
 import { toast } from "sonner";
-import { useWallet } from "@/src/lib/genlayer/wallet"
 import { Claim, FactCheckResult, Investigation, MarketPosition, UserProfile } from "../types";
 import { getAddress } from "viem";
+import { useAccount } from "wagmi";
 
 
 export function useTruthArenaContract(): TruthArena | null {
     const contractAddress = getContractAddress();
-    const { address: LowerCaseAddress } = useWallet();
-    const address = LowerCaseAddress ? getAddress(LowerCaseAddress) : "";
-
+    const { address: rawAddress } = useAccount();
+    const address = rawAddress ? getAddress(rawAddress) : "";
     return useMemo(() => {
         if (!contractAddress || !address) {
             return null;
@@ -279,6 +278,9 @@ export function usePlaceBet() {
             await queryClient.invalidateQueries({
                 queryKey: ["claim_positions", variables.claim_id],
             });
+            await queryClient.invalidateQueries({
+                queryKey: ["claims"],
+            });
         },
         onError: async (error) => {
             console.error("Error Placing bets:", error);
@@ -328,10 +330,10 @@ export function useResolveTruthMarket() {
     return useMutation({
         mutationFn: async ({
             claim_id,
-          
+
         }: {
             claim_id: string;
-            
+
         }) => {
             if (!contract) {
                 throw new Error("Contract not initialized");
