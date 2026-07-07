@@ -432,7 +432,7 @@ export default function MarketsPage({
                       <p className="text-xs text-[#6b7280] max-w-md mx-auto leading-relaxed">
                         {isMarketResolved 
                           ? `This market successfully resolved at ${new Date(selectedClaim.resolved_at!).toLocaleString()}. Payout claims are processed based on your winning stakes.`
-                          : `The staking window closed at ${new Date(selectedClaim.market_deadline).toLocaleString()}. Staking is now locked while GenLayer validators compute the final consensus.`}
+                          : `The staking window closed. Staking is now locked while GenLayer validators compute the final consensus.`}
                       </p>
                     </div>
                   </div>

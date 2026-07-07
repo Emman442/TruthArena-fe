@@ -139,7 +139,7 @@ export default function App() {
       <footer className="border-t border-[#e5e5e5] py-8 text-center text-xs font-mono text-[#6b7280]">
         <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-4">
           <span>© 2026 TruthArena — Powered by GenLayer Intelligent Contracts</span>
-          <span className="text-[10px] bg-[#f9f9f9] border border-[#e5e5e5] px-2 py-1">Studionet Node Active</span>
+          <span className="text-[10px] bg-[#f9f9f9] border border-[#e5e5e5] px-2 py-1">Studionet</span>
         </div>
       </footer>
 

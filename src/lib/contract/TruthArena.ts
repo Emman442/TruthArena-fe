@@ -301,6 +301,8 @@ class TruthArena {
             const receipt = await this.client.waitForTransactionReceipt({
                 hash: txHash,
                 status: TransactionStatus.ACCEPTED,
+                retries: 60,
+                interval: 5000,
             });
 
             return receipt as TransactionReceipt;
